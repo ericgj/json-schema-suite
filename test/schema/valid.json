@@ -1,0 +1,13 @@
+{
+  "description": "A valid JSON Schema",
+  "anyOf": [
+    {
+      "type": "integer",
+      "minimum": 20
+    },
+    {
+      "type": "integer",
+      "maximum": 100
+    }
+  ]
+}

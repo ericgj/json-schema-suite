@@ -1,0 +1,23 @@
+{
+  "name": "json-schema-suite",
+  "repo": "ericgj/json-schema-suite",
+  "description": "JSON Schema components bundled",
+  "version": "0.0.1",
+  "keywords": [],
+  "dependencies": {
+    "ericgj/json-schema-core": "*",
+    "ericgj/json-schema-hyper": "*",
+    "ericgj/json-schema-valid": "*",
+    "ericgj/json-schema-agent": "*",
+    "visionmedia/superagent": "*"
+  },
+  "development": {
+    "timoxley/assert": "*",
+    "ericgj/json-schema-uri": "*"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ]
+}

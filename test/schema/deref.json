@@ -1,0 +1,7 @@
+{
+  "description": "A valid JSON schema with external reference",
+  "not": {
+    "$ref": "/schema/valid.json"
+  }
+}
+

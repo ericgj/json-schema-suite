@@ -1,0 +1,6 @@
+{
+  "description": "An invalid JSON Schema",
+  "dependencies": {
+    "one": "two"
+  }
+}

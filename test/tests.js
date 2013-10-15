@@ -17,6 +17,16 @@ describe('json-schema-suite', function(){
     this.agent = new Agent();
     this.agent.base(window.location.origin);
   })
+  
+  it('should fetch meta-schema', function(done){
+    this.agent.get('/schema/meta/schema.json', function(err,corr){
+      assert(!err);
+      corr.instance.id = window.location.origin + "/schema/meta/schema.json"
+      var schema = new Schema().parse(corr.instance);
+      console.log("meta-schema: referenced: %o", schema);
+      done();
+    })
+  })
 
   it('should fetch and validate valid schema against meta-schema', function(done){
     this.agent.get('/schema/valid.json', function(err,corr){

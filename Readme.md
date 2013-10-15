@@ -45,7 +45,7 @@ See [json-schema-agent][agent], [json-schema-valid][valid],
   MIT
 
 
-[json-schema-agent]: https://github.com/ericgj/json-schema-agent
-[json-schema-valid]: https://github.com/ericgj/json-schema-valid
-[json-schema-core]: https://github.com/ericgj/json-schema-core
+[agent]: https://github.com/ericgj/json-schema-agent
+[valid]: https://github.com/ericgj/json-schema-valid
+[core]: https://github.com/ericgj/json-schema-core
 

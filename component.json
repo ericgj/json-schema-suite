@@ -2,7 +2,7 @@
   "name": "json-schema-suite",
   "repo": "ericgj/json-schema-suite",
   "description": "JSON Schema components bundled",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "keywords": [],
   "dependencies": {
     "ericgj/json-schema-core": "*",

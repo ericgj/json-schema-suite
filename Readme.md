@@ -13,6 +13,7 @@ component:
     $ component install ericgj/json-schema-suite
 
 npm:
+
     $ npm install json-schema-suite
 
 
@@ -32,7 +33,7 @@ npm:
   var agent = new Agent()
   agent.base(window.location.origin);
 
-  agent.get('http://my.site/api', function(err,corr){
+  agent.get('/api', function(err,corr){
     if (corr.validate()) {
       //...
     }

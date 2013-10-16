@@ -9,11 +9,11 @@
     "ericgj/json-schema-hyper": "*",
     "ericgj/json-schema-valid": "*",
     "ericgj/json-schema-agent": "*",
-    "visionmedia/superagent": "*"
+    "visionmedia/superagent": "*",
+    "forbeslindesay/is-browser": "*"
   },
   "development": {
-    "timoxley/assert": "*",
-    "ericgj/json-schema-uri": "*"
+    "timoxley/assert": "*"
   },
   "license": "MIT",
   "main": "index.js",

@@ -11,11 +11,13 @@ listener.on('debug', function(e){
   console.debug(e.message + " %o", e);
 })
 
+var ORIGIN = 'http://localhost:3000'
+
 describe('json-schema-suite', function(){
 
   beforeEach( function(){
     this.agent = new Agent();
-    this.agent.base(window.location.origin);
+    this.agent.base(window ? window.location.origin : ORIGIN);
   })
   
   it('should fetch meta-schema', function(done){

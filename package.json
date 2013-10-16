@@ -1,0 +1,30 @@
+{
+  "name": "json-schema-suite",
+  "version": "0.0.1",
+  "description": "JSON Schema components bundled",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo '*** make sure you run npm test-server first ***' && mocha --ui bdd test/tests.js",
+    "test-server": "node test/server.js"
+  },
+  "dependencies": {
+    "json-schema-core-component": "https://github.com/ericgj/json-schema-core/tarball/master",
+    "json-schema-hyper-component": "https://github.com/ericgj/json-schema-hyper/tarball/master",
+    "json-schema-valid-component": "https://github.com/ericgj/json-schema-valid/tarball/master",
+    "json-schema-agent-component": "https://github.com/ericgj/json-schema-agent/tarball/master",
+    "superagent": "https://github.com/visionmedia/superagent/tarball/master",
+    "is-browser": "https://github.com/forbeslindesay/is-browser/tarball/master"
+  },
+  "devDependencies": {
+    "mocha": "*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ericgj/json-schema-suite.git"
+  },
+  "author": "Eric Gjertsen",
+  "license": "MIT"
+}

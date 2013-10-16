@@ -7,8 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo '*** make sure you run npm test-server first ***' && mocha --ui bdd test/tests.js",
-    "test-server": "node test/server.js"
+    "test": "echo '*** make sure you run node test/server.js first ***' && mocha --ui bdd test/tests.js"
   },
   "dependencies": {
     "json-schema-core-component": "https://github.com/ericgj/json-schema-core/tarball/master",

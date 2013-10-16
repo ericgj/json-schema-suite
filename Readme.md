@@ -40,6 +40,22 @@
 See [json-schema-agent][agent], [json-schema-valid][valid],
 [json-schema-core][core] for details.
 
+## Running tests
+
+### In browser
+
+  ```sh
+  $ node test/server.js
+  ```
+  And browse `http://localhost:3000`.
+
+### In node
+
+  ```sh
+  $ node test/server.js &
+  $ npm test
+  ```
+
 ## License
 
   MIT

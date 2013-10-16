@@ -1,6 +1,7 @@
 'use strict';
 
-var assert = require('assert')
+var isBrowser = require('is-browser')
+  , assert = require('assert')
   , suite = require('json-schema-suite')
   , Agent = suite.Agent
   , Schema = suite.Schema
@@ -8,22 +9,22 @@ var assert = require('assert')
   , listener = Validator.emitter()
 
 listener.on('debug', function(e){
-  console.debug(e.message + " %o", e);
+  console.log(e.message + " %o", e);
 })
 
-var ORIGIN = 'http://localhost:3000'
+var ORIGIN = isBrowser ? window.location.origin : 'http://localhost:3000'
 
 describe('json-schema-suite', function(){
 
   beforeEach( function(){
     this.agent = new Agent();
-    this.agent.base(window ? window.location.origin : ORIGIN);
+    this.agent.base(ORIGIN);
   })
   
   it('should fetch meta-schema', function(done){
     this.agent.get('/schema/meta/schema.json', function(err,corr){
       assert(!err);
-      corr.instance.id = window.location.origin + "/schema/meta/schema.json"
+      corr.instance.id = ORIGIN + "/schema/meta/schema.json"
       var schema = new Schema().parse(corr.instance);
       console.log("meta-schema: referenced: %o", schema);
       done();

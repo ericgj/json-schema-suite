@@ -8,7 +8,13 @@
 
 ## Installation
 
+component:
+
     $ component install ericgj/json-schema-suite
+
+npm:
+    $ npm install json-schema-suite
+
 
 ## Example
 

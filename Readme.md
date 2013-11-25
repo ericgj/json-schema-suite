@@ -13,15 +13,15 @@
 
 ## Installation
 
-component:
+__component__:
 
     $ component install ericgj/json-schema-suite
 
-npm:
+__npm__:
 
     $ npm install json-schema-suite
 
-browser standalone:
+__browser standalone__:
 
   Include `build.js` or `build.min.js` in a script tag.
   This will give you a `window.jsonSchema` global.

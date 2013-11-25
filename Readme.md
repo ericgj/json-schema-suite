@@ -21,6 +21,17 @@ npm:
 
     $ npm install json-schema-suite
 
+browser standalone:
+
+  Include `build.js` or `build.min.js` in a script tag.
+  This will give you a `window.jsonSchema` global.
+  If you would prefer a different global, clone this repo and rebuild like:
+
+    $ component install
+    $ component build --standalone myGlobal
+
+  Then move the `build/build.js` file into your project.
+
 
 ## Example
 

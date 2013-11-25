@@ -3,8 +3,13 @@
 
   JSON Schema components bundled for easy use.
 
-  Configures the Schema with validation and hyperlink plugins, and exposes
-  the Agent, as well as Schema and Validator for further configuration.
+  - Configures Schema with validation and hyperlink plugins.
+  
+  - Configures the Agent to use [visionmedia/superagent][superagent] as the
+    underlying http client.
+
+  - Exposes Agent, as well as Schema and Validator for further configuration.
+
 
 ## Installation
 
@@ -23,20 +28,26 @@ npm:
 
   var suite = require('json-schema-suite')
     , Agent = suite.Agent
-    , Validator = suite.Validator
-    , listener = Validator.emitter()
 
-  listener.on('error', function(e){
-    console.error(e);
-  })
+  var agent = new Agent();
 
-  var agent = new Agent()
-  agent.base(window.location.origin);
+  agent.get('/api', function(err,correlation){
 
-  agent.get('/api', function(err,corr){
-    if (corr.validate()) {
+    // validation
+    correlation.once('error', function(e){
+      console.error(e);
+    })
+
+    if (correlation.validate()) {
       //...
     }
+
+    
+    // follow resolved links in correlations
+    agent.follow( correlation.rel('instances'), function(){
+      //...
+    });
+
   })
 
 
@@ -71,4 +82,5 @@ See [json-schema-agent][agent], [json-schema-valid][valid],
 [agent]: https://github.com/ericgj/json-schema-agent
 [valid]: https://github.com/ericgj/json-schema-valid
 [core]: https://github.com/ericgj/json-schema-core
+[superagent]: https://github.com/visionmedia/superagent
 

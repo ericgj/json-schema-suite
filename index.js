@@ -17,6 +17,7 @@ Agent.service(Service);
 module.exports = {
   Schema:  Schema,
   Agent:  Agent,
-  Validator: valid
+  Validator: valid,
+  HyperSchema: hyper
 }
 

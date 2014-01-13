@@ -6,11 +6,6 @@ var isBrowser = require('is-browser')
   , Agent = suite.Agent
   , Schema = suite.Schema
   , Validator = suite.Validator
-  , listener = Validator.emitter()
-
-listener.on('debug', function(e){
-  console.log(e.message + " %o", e);
-})
 
 var ORIGIN = isBrowser ? window.location.origin : 'http://localhost:3000'
 

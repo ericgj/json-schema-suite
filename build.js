@@ -27,10 +27,14 @@ function require(path, parent, orig) {
   // perform real require()
   // by invoking the module's
   // registered function
-  if (!module.exports) {
-    module.exports = {};
-    module.client = module.component = true;
-    module.call(this, module.exports, require.relative(resolved), module);
+  if (!module._resolving && !module.exports) {
+    var mod = {};
+    mod.exports = {};
+    mod.client = mod.component = true;
+    module._resolving = true;
+    module.call(this, mod.exports, require.relative(resolved), mod);
+    delete module._resolving;
+    module.exports = mod.exports;
   }
 
   return module.exports;
@@ -64,7 +68,6 @@ require.aliases = {};
 
 require.resolve = function(path) {
   if (path.charAt(0) === '/') path = path.slice(1);
-  var index = path + '/index.js';
 
   var paths = [
     path,
@@ -77,10 +80,7 @@ require.resolve = function(path) {
   for (var i = 0; i < paths.length; i++) {
     var path = paths[i];
     if (require.modules.hasOwnProperty(path)) return path;
-  }
-
-  if (require.aliases.hasOwnProperty(index)) {
-    return require.aliases[index];
+    if (require.aliases.hasOwnProperty(path)) return require.aliases[path];
   }
 };
 
@@ -563,7 +563,6 @@ function array(obj, fn) {
 
 });
 require.register("component-type/index.js", function(exports, require, module){
-
 /**
  * toString ref.
  */
@@ -580,20 +579,19 @@ var toString = Object.prototype.toString;
 
 module.exports = function(val){
   switch (toString.call(val)) {
-    case '[object Function]': return 'function';
     case '[object Date]': return 'date';
     case '[object RegExp]': return 'regexp';
     case '[object Arguments]': return 'arguments';
     case '[object Array]': return 'array';
-    case '[object String]': return 'string';
+    case '[object Error]': return 'error';
   }
 
   if (val === null) return 'null';
   if (val === undefined) return 'undefined';
+  if (val !== val) return 'NaN';
   if (val && val.nodeType === 1) return 'element';
-  if (val === Object(val)) return 'object';
 
-  return typeof val;
+  return typeof val.valueOf();
 };
 
 });
@@ -606,22 +604,7 @@ module.exports = function(a, b){
   a.prototype.constructor = a;
 };
 });
-require.register("component-indexof/index.js", function(exports, require, module){
-module.exports = function(arr, obj){
-  if (arr.indexOf) return arr.indexOf(obj);
-  for (var i = 0; i < arr.length; ++i) {
-    if (arr[i] === obj) return i;
-  }
-  return -1;
-};
-});
 require.register("component-emitter/index.js", function(exports, require, module){
-
-/**
- * Module dependencies.
- */
-
-var index = require('indexof');
 
 /**
  * Expose `Emitter`.
@@ -690,7 +673,7 @@ Emitter.prototype.once = function(event, fn){
     fn.apply(this, arguments);
   }
 
-  fn._off = on;
+  on.fn = fn;
   this.on(event, on);
   return this;
 };
@@ -728,8 +711,14 @@ Emitter.prototype.removeEventListener = function(event, fn){
   }
 
   // remove specific handler
-  var i = index(callbacks, fn._off || fn);
-  if (~i) callbacks.splice(i, 1);
+  var cb;
+  for (var i = 0; i < callbacks.length; i++) {
+    cb = callbacks[i];
+    if (cb === fn || cb.fn === fn) {
+      callbacks.splice(i, 1);
+      break;
+    }
+  }
   return this;
 };
 
@@ -2830,6 +2819,15 @@ function refOf(obj){
 }
 
 });
+require.register("component-indexof/index.js", function(exports, require, module){
+module.exports = function(arr, obj){
+  if (arr.indexOf) return arr.indexOf(obj);
+  for (var i = 0; i < arr.length; ++i) {
+    if (arr[i] === obj) return i;
+  }
+  return -1;
+};
+});
 require.register("ericgj-json-schema-valid/index.js", function(exports, require, module){
 'use strict';
 
@@ -4280,12 +4278,14 @@ Agent.prototype.follow = function(link,obj,fn){
  * relation to _schema_ URIs.
  */
 Agent.prototype.getSchema =
-Agent.prototype.getCache = function(uri, fn){
+Agent.prototype.getCache = function(uri, fn, crumb){
   var agent = this
     , schemaUri = Uri(this.base()).join(uri)
     , base = schemaUri.base()
     , fragment = schemaUri.fragment()
     , schema = agent._cache.get(base)
+  
+  crumb = crumb || []; // processed uris
 
   // cache hit
   if (schema){
@@ -4298,13 +4298,15 @@ Agent.prototype.getCache = function(uri, fn){
       if (err){ fn(err); return; }
       var obj = corr.instance;
       obj.id = obj.id || base;
+      
+      crumb.push(obj.id);  // processed, but not yet dereferenced
 
       agent.dereference(obj,function(err,schema){
         if (err){ fn(err); return; }
         agent._cache.set(base,schema);
         if (fragment) schema = schema.$(fragment);
         fn(undefined,schema);
-      });
+      }, crumb);
 
     })
   }
@@ -4313,11 +4315,11 @@ Agent.prototype.getCache = function(uri, fn){
 /*
  * Dereference raw schema object, yielding built schema
  */
-Agent.prototype.dereference = function(obj,fn){
+Agent.prototype.dereference = function(obj,fn,crumb){
   var schema = new Schema().parse(obj);
   deref(this,schema, function(err){
     fn(err,schema);
-  });
+  }, crumb);
 }
 
 // private 
@@ -4405,7 +4407,7 @@ function correlateSchemas(uris,instance,targetSchema,fn){
     var uri = uris.shift()
     
     agent.getCache(uri, function(err,schema){
-      if (err){ return; }  // ignore if error getting one schema, not quite right
+      if (err){ fn(err); return; }  // note does not stop correlating next schema
       schemas.push(schema);
 
       // last schema, union and build correlation
@@ -4556,12 +4558,14 @@ require.register("ericgj-json-schema-agent/deref.js", function(exports, require,
 
 var isBrowser = require('is-browser')
   , Emitter = isBrowser ? require('emitter') : require('emitter-component')
+  , Uri = isBrowser ? require('json-schema-uri') : require('json-schema-uri-component')
 
 module.exports = Deref;
 
-function Deref(agent,schema,fn){
-  if (!(this instanceof Deref)) return new Deref(agent,schema,fn);
+function Deref(agent,schema,fn,crumb){
+  if (!(this instanceof Deref)) return new Deref(agent,schema,fn,crumb);
   this.agent = agent;
+  this.crumb = crumb || [];
   if (schema) this.dereference(schema,fn);
   return this;
 }
@@ -4573,6 +4577,7 @@ Deref.prototype.dereference = function(schema,fn){
   schema = schema.root() || schema;
   var remotes = [];
   var self = this;
+  var crumb = this.crumb;
 
   if (fn){ 
     this.once('ready',fn); 
@@ -4588,9 +4593,10 @@ Deref.prototype.dereference = function(schema,fn){
     self.emit('ready');
   } else {
     while (remotes.length){
-      var next = remotes.shift()
-      next.push(remotes.length == 0);
-      asyncDereference.apply(self,next);
+      var args = remotes.shift()
+      args.push(remotes.length == 0);
+      args.push(crumb);
+      asyncDereference.apply(self,args);
     }
   }
 }
@@ -4603,8 +4609,19 @@ function inlineDereference(schema,uri,node,key){
   return (!!ref);
 }
 
-function asyncDereference(uri,node,key,last){
+function asyncDereference(uri,node,key,last,crumb){
   var self = this, agent = this.agent
+    , baseUri = Uri(uri).base().toString()
+  
+  if (~indexOf(crumb,baseUri)) {
+    var e = new Error('Cyclical references found: "' + uri + 
+                      '" in ' + crumb[crumb.length-1]
+                     );
+    e.references = crumb;
+    self.emit('error', e);
+    return;
+  }
+
   agent.getCache(uri, function(err,refnode){
     if (err){
       self.emit('error', err);
@@ -4612,10 +4629,22 @@ function asyncDereference(uri,node,key,last){
     }
 
     node.set(key,refnode);
+
     if (last) self.emit('ready');
 
-  })
+  }, crumb )
 }
+
+
+// inlined
+
+function indexOf(arr, obj){
+  if (arr.indexOf) return arr.indexOf(obj);
+  for (var i = 0; i < arr.length; ++i) {
+    if (arr[i] === obj) return i;
+  }
+  return -1;
+};
 
 
 });
@@ -4744,8 +4773,10 @@ function serialize(obj) {
   if (!isObject(obj)) return obj;
   var pairs = [];
   for (var key in obj) {
-    pairs.push(encodeURIComponent(key)
-      + '=' + encodeURIComponent(obj[key]));
+    if (null != obj[key]) {
+      pairs.push(encodeURIComponent(key)
+        + '=' + encodeURIComponent(obj[key]));
+    }
   }
   return pairs.join('&');
 }
@@ -4795,6 +4826,7 @@ request.parseString = parseString;
 request.types = {
   html: 'text/html',
   json: 'application/json',
+  xml: 'application/xml',
   urlencoded: 'application/x-www-form-urlencoded',
   'form': 'application/x-www-form-urlencoded',
   'form-data': 'application/x-www-form-urlencoded'
@@ -5221,6 +5253,31 @@ Request.prototype.type = function(type){
 };
 
 /**
+ * Set Accept to `type`, mapping values from `request.types`.
+ *
+ * Examples:
+ *
+ *      superagent.types.json = 'application/json';
+ *
+ *      request.get('/agent')
+ *        .accept('json')
+ *        .end(callback);
+ *
+ *      request.get('/agent')
+ *        .accept('application/json')
+ *        .end(callback);
+ *
+ * @param {String} accept
+ * @return {Request} for chaining
+ * @api public
+ */
+
+Request.prototype.accept = function(type){
+  this.set('Accept', request.types[type] || type);
+  return this;
+};
+
+/**
  * Set Authorization field value with `user` and `pass`.
  *
  * @param {String} user
@@ -5410,9 +5467,6 @@ Request.prototype.end = function(fn){
   // store callback
   this._callback = fn || noop;
 
-  // CORS
-  if (this._withCredentials) xhr.withCredentials = true;
-
   // state change
   xhr.onreadystatechange = function(){
     if (4 != xhr.readyState) return;
@@ -5448,6 +5502,9 @@ Request.prototype.end = function(fn){
 
   // initiate request
   xhr.open(this.method, this.url, true);
+
+  // CORS
+  if (this._withCredentials) xhr.withCredentials = true;
 
   // body
   if ('GET' != this.method && 'HEAD' != this.method && 'string' != typeof data && !isHost(data)) {
@@ -5637,11 +5694,36 @@ Agent.service(Service);
 module.exports = {
   Schema:  Schema,
   Agent:  Agent,
-  Validator: valid
+  Validator: valid,
+  HyperSchema: hyper
 }
 
 
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 require.alias("ericgj-json-schema-core/index.js", "json-schema-suite/deps/json-schema-core/index.js");
 require.alias("ericgj-json-schema-core/refs.js", "json-schema-suite/deps/json-schema-core/refs.js");
 require.alias("ericgj-json-schema-core/correlation.js", "json-schema-suite/deps/json-schema-core/correlation.js");
@@ -5650,7 +5732,6 @@ require.alias("ericgj-json-schema-core/index.js", "json-schema-core/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-uri/index.js");
-
 require.alias("component-each/index.js", "ericgj-json-schema-core/deps/each/index.js");
 require.alias("component-to-function/index.js", "component-each/deps/to-function/index.js");
 
@@ -5661,14 +5742,11 @@ require.alias("component-type/index.js", "ericgj-json-schema-core/deps/type/inde
 require.alias("component-inherit/index.js", "ericgj-json-schema-core/deps/inherit/index.js");
 
 require.alias("component-emitter/index.js", "ericgj-json-schema-core/deps/emitter/index.js");
-require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
 
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-core/index.js");
-
 require.alias("ericgj-json-schema-hyper/index.js", "json-schema-suite/deps/json-schema-hyper/index.js");
 require.alias("ericgj-json-schema-hyper/index.js", "json-schema-suite/deps/json-schema-hyper/index.js");
 require.alias("ericgj-json-schema-hyper/index.js", "json-schema-hyper/index.js");
@@ -5679,7 +5757,6 @@ require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-hyper/deps
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-uri/index.js");
-
 require.alias("component-each/index.js", "ericgj-json-schema-core/deps/each/index.js");
 require.alias("component-to-function/index.js", "component-each/deps/to-function/index.js");
 
@@ -5690,18 +5767,14 @@ require.alias("component-type/index.js", "ericgj-json-schema-core/deps/type/inde
 require.alias("component-inherit/index.js", "ericgj-json-schema-core/deps/inherit/index.js");
 
 require.alias("component-emitter/index.js", "ericgj-json-schema-core/deps/emitter/index.js");
-require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
 
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-core/index.js");
-
 require.alias("ericgj-uritemplate/bin/uritemplate.js", "ericgj-json-schema-hyper/deps/uritemplate/bin/uritemplate.js");
 require.alias("ericgj-uritemplate/bin/uritemplate.js", "ericgj-json-schema-hyper/deps/uritemplate/index.js");
 require.alias("ericgj-uritemplate/bin/uritemplate.js", "ericgj-uritemplate/index.js");
-
 require.alias("component-inherit/index.js", "ericgj-json-schema-hyper/deps/inherit/index.js");
 
 require.alias("component-each/index.js", "ericgj-json-schema-hyper/deps/each/index.js");
@@ -5720,9 +5793,7 @@ require.alias("component-to-function/index.js", "component-find/deps/to-function
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-hyper/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-hyper/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-hyper/index.js", "ericgj-json-schema-hyper/index.js");
-
 require.alias("ericgj-json-schema-valid/index.js", "json-schema-suite/deps/json-schema-valid/index.js");
 require.alias("ericgj-json-schema-valid/validate.js", "json-schema-suite/deps/json-schema-valid/validate.js");
 require.alias("ericgj-json-schema-valid/context.js", "json-schema-suite/deps/json-schema-valid/context.js");
@@ -5744,7 +5815,6 @@ require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-valid/deps
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-uri/index.js");
-
 require.alias("component-each/index.js", "ericgj-json-schema-core/deps/each/index.js");
 require.alias("component-to-function/index.js", "component-each/deps/to-function/index.js");
 
@@ -5755,14 +5825,11 @@ require.alias("component-type/index.js", "ericgj-json-schema-core/deps/type/inde
 require.alias("component-inherit/index.js", "ericgj-json-schema-core/deps/inherit/index.js");
 
 require.alias("component-emitter/index.js", "ericgj-json-schema-core/deps/emitter/index.js");
-require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
 
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-core/index.js");
-
 require.alias("component-type/index.js", "ericgj-json-schema-valid/deps/type/index.js");
 
 require.alias("component-indexof/index.js", "ericgj-json-schema-valid/deps/indexof/index.js");
@@ -5777,9 +5844,7 @@ require.alias("component-to-function/index.js", "ericgj-json-schema-valid/deps/t
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-valid/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-valid/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-valid/index.js", "ericgj-json-schema-valid/index.js");
-
 require.alias("ericgj-json-schema-agent/index.js", "json-schema-suite/deps/json-schema-agent/index.js");
 require.alias("ericgj-json-schema-agent/linkheader.js", "json-schema-suite/deps/json-schema-agent/linkheader.js");
 require.alias("ericgj-json-schema-agent/deref.js", "json-schema-suite/deps/json-schema-agent/deref.js");
@@ -5792,7 +5857,6 @@ require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-agent/deps
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-uri/index.js");
-
 require.alias("component-each/index.js", "ericgj-json-schema-core/deps/each/index.js");
 require.alias("component-to-function/index.js", "component-each/deps/to-function/index.js");
 
@@ -5803,14 +5867,11 @@ require.alias("component-type/index.js", "ericgj-json-schema-core/deps/type/inde
 require.alias("component-inherit/index.js", "ericgj-json-schema-core/deps/inherit/index.js");
 
 require.alias("component-emitter/index.js", "ericgj-json-schema-core/deps/emitter/index.js");
-require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
 
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-core/index.js");
-
 require.alias("ericgj-json-schema-hyper/index.js", "ericgj-json-schema-agent/deps/json-schema-hyper/index.js");
 require.alias("ericgj-json-schema-hyper/index.js", "ericgj-json-schema-agent/deps/json-schema-hyper/index.js");
 require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-hyper/deps/json-schema-core/index.js");
@@ -5820,7 +5881,6 @@ require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-hyper/deps
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-core/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-uri/index.js");
-
 require.alias("component-each/index.js", "ericgj-json-schema-core/deps/each/index.js");
 require.alias("component-to-function/index.js", "component-each/deps/to-function/index.js");
 
@@ -5831,18 +5891,14 @@ require.alias("component-type/index.js", "ericgj-json-schema-core/deps/type/inde
 require.alias("component-inherit/index.js", "ericgj-json-schema-core/deps/inherit/index.js");
 
 require.alias("component-emitter/index.js", "ericgj-json-schema-core/deps/emitter/index.js");
-require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
 
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-core/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-core/index.js", "ericgj-json-schema-core/index.js");
-
 require.alias("ericgj-uritemplate/bin/uritemplate.js", "ericgj-json-schema-hyper/deps/uritemplate/bin/uritemplate.js");
 require.alias("ericgj-uritemplate/bin/uritemplate.js", "ericgj-json-schema-hyper/deps/uritemplate/index.js");
 require.alias("ericgj-uritemplate/bin/uritemplate.js", "ericgj-uritemplate/index.js");
-
 require.alias("component-inherit/index.js", "ericgj-json-schema-hyper/deps/inherit/index.js");
 
 require.alias("component-each/index.js", "ericgj-json-schema-hyper/deps/each/index.js");
@@ -5861,15 +5917,11 @@ require.alias("component-to-function/index.js", "component-find/deps/to-function
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-hyper/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-hyper/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-hyper/index.js", "ericgj-json-schema-hyper/index.js");
-
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-agent/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-agent/deps/json-schema-uri/index.js");
 require.alias("ericgj-json-schema-uri/index.js", "ericgj-json-schema-uri/index.js");
-
 require.alias("component-emitter/index.js", "ericgj-json-schema-agent/deps/emitter/index.js");
-require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
 
 require.alias("component-each/index.js", "ericgj-json-schema-agent/deps/each/index.js");
 require.alias("component-to-function/index.js", "component-each/deps/to-function/index.js");
@@ -5881,27 +5933,20 @@ require.alias("component-type/index.js", "ericgj-json-schema-agent/deps/type/ind
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-agent/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "ericgj-json-schema-agent/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
 require.alias("ericgj-json-schema-agent/index.js", "ericgj-json-schema-agent/index.js");
-
 require.alias("visionmedia-superagent/lib/client.js", "json-schema-suite/deps/superagent/lib/client.js");
 require.alias("visionmedia-superagent/lib/client.js", "json-schema-suite/deps/superagent/index.js");
 require.alias("visionmedia-superagent/lib/client.js", "superagent/index.js");
 require.alias("component-emitter/index.js", "visionmedia-superagent/deps/emitter/index.js");
-require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
 
 require.alias("RedVentures-reduce/index.js", "visionmedia-superagent/deps/reduce/index.js");
 
 require.alias("visionmedia-superagent/lib/client.js", "visionmedia-superagent/index.js");
-
 require.alias("forbeslindesay-is-browser/client.js", "json-schema-suite/deps/is-browser/client.js");
 require.alias("forbeslindesay-is-browser/client.js", "json-schema-suite/deps/is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "is-browser/index.js");
 require.alias("forbeslindesay-is-browser/client.js", "forbeslindesay-is-browser/index.js");
-
-require.alias("json-schema-suite/index.js", "json-schema-suite/index.js");
-
-if (typeof exports == "object") {
+require.alias("json-schema-suite/index.js", "json-schema-suite/index.js");if (typeof exports == "object") {
   module.exports = require("json-schema-suite");
 } else if (typeof define == "function" && define.amd) {
   define(function(){ return require("json-schema-suite"); });

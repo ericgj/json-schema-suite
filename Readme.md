@@ -33,14 +33,24 @@ __browser standalone__:
   Then move the `build/build.js` file into your project.
 
 
-## Example
+## Examples
 
   ```javascript
 
   var suite = require('json-schema-suite')
-    , Agent = suite.Agent
 
-  var agent = new Agent();
+  // Simple validation
+  // see json-schema-valid for more details
+
+  var validator = new suite.Validator()
+
+  validator.validateRaw(schema,instance); // boolean
+  validator.error();   // validation error(s) wrapped in error object
+
+
+  // HTTP correlation
+
+  var agent = new suite.Agent()
 
   agent.get('/api', function(err,correlation){
 
@@ -60,7 +70,6 @@ __browser standalone__:
     });
 
   })
-
 
   ```
 
